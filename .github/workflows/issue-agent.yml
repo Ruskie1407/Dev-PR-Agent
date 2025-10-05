@@ -1,0 +1,64 @@
+name: Issue Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_owner:
+        description: "Repo owner (e.g. Ruskie1407)"
+        required: true
+      target_repo:
+        description: "Target repo (paulspeaks-lite or brightscheduler-mini)"
+        required: true
+      issue_number:
+        description: "Issue number to read for instruction"
+        required: false
+      instruction:
+        description: "Direct instruction (if not using issue)"
+        required: false
+      pr_title:
+        description: "PR title"
+        required: false
+        default: "Agent: implement requested changes"
+
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  run-agent:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.comment.body, '/agent')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm i
+      - name: Compute inputs
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "owner=${{ github.event.inputs.target_owner }}" >> $GITHUB_OUTPUT
+            echo "repo=${{ github.event.inputs.target_repo }}" >> $GITHUB_OUTPUT
+            echo "issue=${{ github.event.inputs.issue_number }}" >> $GITHUB_OUTPUT
+            echo "instruction=${{ github.event.inputs.instruction }}" >> $GITHUB_OUTPUT
+            echo "pr_title=${{ github.event.inputs.pr_title }}" >> $GITHUB_OUTPUT
+          else
+            # Triggered by /agent comment on an issue or PR in the target repo
+            echo "owner=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
+            echo "repo=${{ github.event.repository.name }}" >> $GITHUB_OUTPUT
+            echo "issue=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+            # Remove the '/agent' prefix from the comment to get the instruction
+            CLEAN=$(echo "${{ github.event.comment.body }}" | sed 's#^/agent[[:space:]]*##')
+            echo "instruction=$CLEAN" >> $GITHUB_OUTPUT
+            echo "pr_title=Agent: changes from issue comment" >> $GITHUB_OUTPUT
+          fi
+      - name: Run issue agent
+        run: node src/issue_agent.js
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TARGET_OWNER: ${{ steps.vars.outputs.owner }}
+          TARGET_REPO: ${{ steps.vars.outputs.repo }}
+          ISSUE_NUMBER: ${{ steps.vars.outputs.issue }}
+          INSTRUCTION: ${{ steps.vars.outputs.instruction }}
+          PR_TITLE: ${{ steps.vars.outputs.pr_title }}
