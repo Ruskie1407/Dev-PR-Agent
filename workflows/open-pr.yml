@@ -1,0 +1,51 @@
+name: Dev PR Agent (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_owner:
+        description: "Repo owner (e.g. Ruskie1407)"
+        required: true
+      target_repo:
+        description: "Target repo (e.g. paulspeaks-lite or brightscheduler-mini)"
+        required: true
+      pr_title:
+        description: "PR title"
+        required: false
+        default: "Agent: automated PR"
+      branch_name:
+        description: "Branch name (optional; auto if blank)"
+        required: false
+      file_path:
+        description: "File to create/update"
+        required: false
+        default: "AGENT_CHECK.txt"
+      commit_message:
+        description: "Commit message"
+        required: false
+        default: "chore(agent): update AGENT_CHECK"
+      file_content:
+        description: "File content"
+        required: false
+        default: "Updated by agent."
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm i
+      - name: Run agent
+        run: |
+          node src/main.js
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TARGET_OWNER: ${{ github.event.inputs.target_owner }}
+          TARGET_REPO: ${{ github.event.inputs.target_repo }}
+          PR_TITLE: ${{ github.event.inputs.pr_title }}
+          BRANCH_NAME: ${{ github.event.inputs.branch_name }}
+          FILE_PATH: ${{ github.event.inputs.file_path }}
+          COMMIT_MESSAGE: ${{ github.event.inputs.commit_message }}
+          FILE_CONTENT: ${{ github.event.inputs.file_content }}
