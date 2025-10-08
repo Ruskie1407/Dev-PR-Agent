@@ -1,1 +1,10 @@
+# deps & build
+node_modules/
+.next/
+out/
+.vercel/
+# env
 .env
+.env.*
+# misc
+.DS_Store
