@@ -1,0 +1,9 @@
+name,date,shift,status,role,site
+Anna Cruz,2025-10-07,Day,ok,RN,Ward A
+Ben Lim,2025-10-07,Day,ok,HCA,Ward A
+Ella Gomez,2025-10-07,Day,absent,HCA,Ward A
+Tomas Reyes,2025-10-07,Evening,ok,RN,Ward B
+Kaye Santos,2025-10-07,Evening,ok,HCA,Ward B
+Jun Torres,2025-10-07,Evening,ok,HCA,Ward B
+Lea Dela Cruz,2025-10-07,Night,ok,RN,Ward C
+Ramon Lee,2025-10-07,Night,sick,HCA,Ward C

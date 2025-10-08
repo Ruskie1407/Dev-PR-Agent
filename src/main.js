@@ -1,7 +1,7 @@
 import { Octokit } from "@octokit/rest";
 
 async function run() {
-  const {
+  const 
     GH_TOKEN,
     TARGET_OWNER,
     TARGET_REPO,
