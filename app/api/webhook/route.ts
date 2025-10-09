@@ -1,7 +1,10 @@
 export async function POST(req: Request) {
   const body = await req.text();
   console.log("Webhook received:", body.slice(0, 200));
-  return new Response("ok", { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } });
+  return new Response("ok", {
+    status: 200,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
 }
 
 export async function GET() {
