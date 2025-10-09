@@ -1,7 +1,14 @@
 import crypto from "node:crypto";
 
+// Accept multiple possible env var names (any one is fine)
+const TOKEN =
+  process.env.GITHUB_TOKEN ||
+  process.env.GH_TOKEN ||
+  process.env.GH_FINEGRAINED_TOKEN ||
+  "";
+
 export const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
-export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
+export const GITHUB_TOKEN = TOKEN;
 
 export function verifySignature(raw: string, sigHeader: string | null): boolean {
   if (!WEBHOOK_SECRET || !sigHeader) return false;
@@ -19,10 +26,10 @@ export async function ghFetch(path: string, init: RequestInit = {}) {
   return fetch(`https://api.github.com${path}`, {
     ...init,
     headers: {
-      "authorization": `Bearer ${GITHUB_TOKEN}`,
-      "accept": "application/vnd.github+json",
+      authorization: `Bearer ${GITHUB_TOKEN}`,
+      accept: "application/vnd.github+json",
       "user-agent": "dev-pr-agent",
-      ...(init.headers || {})
-    }
+      ...(init.headers || {}),
+    },
   });
 }
