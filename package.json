@@ -12,6 +12,7 @@
   "dependencies": {
     "@octokit/rest": "^20.0.2",
     "next": "^15.5.4",
+    "openai": "^6.3.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
