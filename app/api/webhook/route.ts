@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 import type { NextRequest } from "next/server";
 import { verifySignature, ghFetch } from "@/lib/github";
 

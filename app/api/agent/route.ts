@@ -3,7 +3,7 @@ import { GITHUB_TOKEN, WEBHOOK_SECRET, ghFetch } from "@/lib/github";
 import { fetchPR, analyze, renderSummary } from "@/lib/review";
 import { chatLLM } from "@/lib/llm"; // falls back if no OPENAI_API_KEY
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   let input = "";
