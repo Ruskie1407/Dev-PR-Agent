@@ -3,8 +3,9 @@ import { fetchWithRetry } from "./retry";
 /**
  * Minimal LLM client using OpenAI-compatible Chat Completions.
  * Env:
- *  - OPENAI_API_KEY (required for LLM mode; otherwise caller should fallback)
+ *  - OPENAI_API_KEY (required)
  *  - OPENAI_BASE_URL (optional; defaults to https://api.openai.com)
+ *  - OPENAI_MODEL (optional; defaults to gpt-5-nano)
  */
 export async function chatLLM(prompt: string): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY || "";
@@ -12,9 +13,10 @@ export async function chatLLM(prompt: string): Promise<string> {
 
   const base = (process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/+$/,"");
   const url  = `${base}/v1/chat/completions`;
+  const model = process.env.OPENAI_MODEL || "gpt-5-nano";
 
   const body = {
-    model: "gpt-4o-mini",
+    model,
     messages: [
       { role: "system", content: "You are a friendly engineering helper. Be concise, warm, and helpful." },
       { role: "user",   content: prompt }
