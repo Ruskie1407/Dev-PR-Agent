@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok:true, reply:"I don't recognize that command. Try /hello or /status" });
   }
 
-  // small-talk fallback
   if (/morning/i.test(text)) return Response.json({ ok:true, reply:"Good morning! ☀️ How are you?" });
   return Response.json({ ok:true, reply:`Got it: “${text}”. Try /hello` });
 }
