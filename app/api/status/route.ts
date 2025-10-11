@@ -1,17 +1,18 @@
-function tokenSource(): string | null {
-  if (process.env.GITHUB_TOKEN) return "GITHUB_TOKEN";
-  if (process.env.GH_TOKEN) return "GH_TOKEN";
-  if (process.env.GH_FINEGRAINED_TOKEN) return "GH_FINEGRAINED_TOKEN";
-  return null;
-}
-
 export async function GET() {
-  const source = tokenSource();
   const ok = {
     WEBHOOK_SECRET: !!process.env.WEBHOOK_SECRET,
-    GITHUB_TOKEN: !!source,
+    GITHUB_TOKEN:
+      !!process.env.GITHUB_TOKEN ||
+      !!process.env.GH_TOKEN ||
+      !!process.env.GH_FINEGRAINED_TOKEN,
+    OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
   };
-  return new Response(JSON.stringify({ ok, tokenSource: source, events: (globalThis as any).__events ?? [] }), {
+  const llm = {
+    OPENAI_BASE_URL: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+    OPENAI_MODEL: process.env.OPENAI_MODEL || "gpt-5-nano",
+  };
+  const body = { ok, llm, time: new Date().toISOString() };
+  return new Response(JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json" }
   });

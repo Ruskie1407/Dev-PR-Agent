@@ -10,18 +10,44 @@ function isResponsesModel(m: string) {
   return /^(gpt-5|gpt-4\.1|gpt-4o|o\d)/i.test(m);
 }
 
+function pickTextFromResponses(body: any): string | null {
+  // 1) output_text (convenience)
+  if (typeof body?.output_text === "string" && body.output_text.trim()) {
+    return body.output_text.trim();
+  }
+  // 2) output[].content[] parts (text fields)
+  const parts = body?.output?.[0]?.content;
+  if (Array.isArray(parts) && parts.length) {
+    const txt = parts
+      .map((p: any) =>
+        typeof p?.text === "string" ? p.text :
+        typeof p?.content === "string" ? p.content : "")
+      .join("")
+      .trim();
+    if (txt) return txt;
+  }
+  // 3) candidates[0].content (older shapes)
+  const cand = body?.candidates?.[0]?.content;
+  if (cand) {
+    if (typeof cand === "string" && cand.trim()) return cand.trim();
+    if (Array.isArray(cand)) {
+      const txt = cand.map((c:any)=>c?.text ?? c?.content ?? "").join("").trim();
+      if (txt) return txt;
+    }
+  }
+  return null;
+}
+
 export async function askLLM(prompt: string): Promise<string> {
   if (!KEY) throw new Error("Missing OPENAI_API_KEY");
 
   if (isResponsesModel(MODEL)) {
-    // ✅ Responses API (modern models)
+    // Modern models → Responses API (no temperature; max_output_tokens is correct)
     const url = `${BASE}/responses`;
     const payload = {
       model: MODEL,
-      input: prompt,
-      // the correct param name:
-      max_output_tokens: 120,
-      // omit temperature/top_p for these models (defaults only)
+      input: [{ role: "user", content: prompt }],
+      max_output_tokens: 120
     };
 
     const res = await fetch(url, {
@@ -39,14 +65,11 @@ export async function askLLM(prompt: string): Promise<string> {
       throw new Error(`OpenAI ${res.status}: ${msg}`);
     }
 
-    const text =
-      (body as any).output_text ??
-      (body as any).output?.[0]?.content?.[0]?.text ??
-      "";
-    return String(text || "OK");
+    const text = pickTextFromResponses(body);
+    return text ?? "OK";
   }
 
-  // 🧰 Legacy chat models → Chat Completions
+  // Legacy chat models → Chat Completions (temperature allowed)
   const url = `${BASE}/chat/completions`;
   const payload = {
     model: MODEL,
