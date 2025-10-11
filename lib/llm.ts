@@ -6,6 +6,8 @@ const KEY =
   process.env.OPENAI_KEY ||
   "";
 
+const MAX_OUT = Math.max(256, Number(process.env.OPENAI_MAX_OUTPUT || "4096")); // you can raise via env
+
 // Project briefs (from env). Keep replies compact by default.
 const BRIEF =
   [process.env.BRIGHTSCHEDULER_BRIEF, process.env.PAULSPEAKS_BRIEF]
@@ -14,8 +16,8 @@ const BRIEF =
 
 const INSTRUCTIONS =
   "You are a helpful, concise product assistant.\n" +
-  "Keep replies <= 60 words unless explicitly asked for detail.\n" +
-  "When asked for ideas, return at most 5 bullets, <= 12 words each.\n\n" +
+  "Default to <= 80 words unless explicitly asked for detail.\n" +
+  "For ideas, return at most 5 bullets, <= 14 words each.\n\n" +
   (BRIEF ? "PROJECT CONTEXT:\n" + BRIEF + "\n\n" : "");
 
 function isResponsesModel(m: string) {
@@ -56,37 +58,49 @@ function extractText(body: any): string | null {
   return null;
 }
 
+async function callResponses(prompt: string, maxOut: number, preface?: string) {
+  const url = `${BASE}/responses`;
+  const payload: any = {
+    model: MODEL,
+    instructions: INSTRUCTIONS,
+    input: preface ? `${preface}\n\n${prompt}` : String(prompt),
+    max_output_tokens: maxOut
+  };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  let body: any; try { body = await res.json(); } catch { body = await res.text(); }
+  return { res, body };
+}
+
 export async function askLLM(prompt: string): Promise<string> {
   if (!KEY) throw new Error("Missing OPENAI_API_KEY");
 
   if (isResponsesModel(MODEL)) {
-    const url = `${BASE}/responses`;
-    const payload = {
-      model: MODEL,
-      instructions: INSTRUCTIONS,       // ← injects your briefs
-      input: String(prompt),
-      max_output_tokens: 2048
-    };
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${KEY}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    let body: any; try { body = await res.json(); } catch { body = await res.text(); }
+    // 1st try
+    let { res, body } = await callResponses(prompt, MAX_OUT);
     if (!res.ok) {
       const msg = (body?.error?.message || body?.error?.code || String(body)).toString();
       throw new Error(`OpenAI ${res.status}: ${msg}`);
     }
-    const text = extractText(body);
-    if (text) return text;
-    if (typeof body === "object" && body?.status === "incomplete") {
-      return "[truncated] Reply was too long. Ask for fewer bullets or shorter output.";
+
+    let text = extractText(body) || "";
+    const incomplete = body?.status === "incomplete" || /max_?output_?tokens/i.test(body?.incomplete_details?.reason || "");
+
+    // If the model stopped at the cap, ask it to finish briefly once.
+    if (incomplete) {
+      const part = text || (typeof body === "string" ? body : JSON.stringify(body));
+      const tail = part.slice(-1500);
+      ({ res, body } = await callResponses(`Continue **briefly** (<= 100 words) to complete:\n${tail}`, Math.min(800, MAX_OUT)));
+      if (res.ok) text = (text + "\n" + (extractText(body) || "")).trim();
     }
+
+    if (text) return text;
     const preview = typeof body === "string" ? body : JSON.stringify(body);
     return `[unparsed model output] ${preview.slice(0, 240)}…`;
   }
@@ -99,8 +113,8 @@ export async function askLLM(prompt: string): Promise<string> {
       { role: "system", content: INSTRUCTIONS },
       { role: "user", content: prompt }
     ],
-    max_tokens: 256,
-    temperature: 0.7,
+    max_tokens: Math.min(1024, MAX_OUT),
+    temperature: 1, // gpt-5-* only accepts default
   };
 
   const res = await fetch(url, {
