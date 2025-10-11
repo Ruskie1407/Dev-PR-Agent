@@ -2,14 +2,9 @@
 
 import * as React from 'react';
 
-type Msg = {
-  id: string;
-  role: 'user' | 'agent';
-  text: string;
-  expanded?: boolean;
-};
+type Msg = { id: string; role: 'user' | 'agent'; text: string };
 
-export default function Chat() {
+export default function Dashboard() {
   const [input, setInput] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [messages, setMessages] = React.useState<Msg[]>([
@@ -22,7 +17,7 @@ export default function Chat() {
     }
   ]);
 
-  // --- Short memory: load once ---
+  // ---- short memory (localStorage)
   React.useEffect(() => {
     try {
       const saved = localStorage.getItem('devpr_chat');
@@ -32,25 +27,22 @@ export default function Chat() {
       }
     } catch {}
   }, []);
-
-  // --- Short memory: save on change ---
   React.useEffect(() => {
-    try {
-      localStorage.setItem('devpr_chat', JSON.stringify(messages));
-    } catch {}
+    try { localStorage.setItem('devpr_chat', JSON.stringify(messages)); } catch {}
   }, [messages]);
 
-  const scrollRef = React.useRef<HTMLDivElement>(null);
+  // ---- auto-scroll inside the chat window
+  const boxRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    const el = boxRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight });
   }, [messages]);
 
   async function send(text: string) {
     if (!text.trim() || busy) return;
     setBusy(true);
 
-    const id = (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
+    const id = crypto.randomUUID?.() ?? String(Date.now());
     setMessages(m => [...m, { id, role: 'user', text }]);
 
     try {
@@ -60,83 +52,165 @@ export default function Chat() {
         body: JSON.stringify({ input: text })
       });
 
-      let data: any = null;
-      try { data = await res.json(); } catch {}
-      let reply =
-        (data && (data.reply || data.output || data.text)) ||
-        (await res.text()).trim() ||
-        'Sorry, no reply.';
+      // try JSON first, fall back to text
+      let reply = '';
+      try {
+        const j = await res.json();
+        reply = (j.reply || j.output || j.text || '') as string;
+      } catch {
+        reply = await res.text();
+      }
+      if (!reply) reply = 'OK';
 
-      if (typeof reply !== 'string') reply = JSON.stringify(reply);
-
-      setMessages(m => [...m, { id: (globalThis.crypto?.randomUUID?.() ?? String(Date.now()+1)), role: 'agent', text: reply }]);
+      setMessages(m => [...m, { id: (crypto.randomUUID?.() ?? String(Date.now()+1)), role: 'agent', text: reply }]);
     } catch (e: any) {
-      setMessages(m => [...m, { id: (globalThis.crypto?.randomUUID?.() ?? String(Date.now()+2)), role: 'agent', text: `Error: ${e?.message || e}` }]);
+      setMessages(m => [...m, { id: (crypto.randomUUID?.() ?? String(Date.now()+2)), role: 'agent', text: `Error: ${e?.message || e}` }]);
     } finally {
       setBusy(false);
     }
   }
 
+  // textarea auto-grow (up to ~6 lines)
+  const taRef = React.useRef<HTMLTextAreaElement>(null);
+  function autoGrow() {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const max = 6 * 28; // 6 lines * line-height
+    ta.style.height = Math.min(ta.scrollHeight, max) + 'px';
+  }
+  React.useEffect(() => { autoGrow(); }, []);
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const t = input;
     setInput('');
+    autoGrow();
     send(t);
   }
 
   return (
-    <main className="min-h-[100svh] flex flex-col items-center p-4 md:p-6 font-[system-ui] bg-gray-50">
-      <div className="w-full max-w-4xl">
-        <header className="mb-3">
-          <h1 className="text-2xl font-semibold">Dev PR Agent</h1>
-          <p className="text-sm text-gray-600">Demo chat (short memory, centered input).</p>
-        </header>
+    <div className="wrap">
+      <h1>Dev PR Agent</h1>
+      <p className="subtitle">Demo chat (short memory, centered input).</p>
 
-        <div
-          ref={scrollRef}
-          className="rounded-2xl border bg-white p-4 space-y-4 overflow-y-auto"
-          style={{ maxHeight: 'calc(100svh - 220px)' }}
-          aria-label="Chat history"
-        >
-          {messages.map(m => (
-            <div
-              key={m.id}
-              className={`rounded-xl px-3 py-2 ${m.role === 'user' ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50 border'}`}
-            >
-              <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
-                {m.role === 'user' ? 'You' : 'Agent'}
-              </div>
-              <p className="whitespace-pre-wrap">{m.text}</p>
-            </div>
-          ))}
-        </div>
-
-        <form onSubmit={onSubmit} className="mt-5 flex items-center justify-center gap-2">
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="Ask for 5 short ideas for BrightScheduler…"
-            className="w-full max-w-2xl rounded-xl border px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-            aria-label="Message input"
-          />
-          <button
-            type="button"
-            onClick={() => { try { localStorage.removeItem('devpr_chat'); } catch {}; setMessages(ms => ms.slice(0, 1)); }}
-            className="rounded-xl px-4 py-3 border bg-white"
-            disabled={busy}
-            aria-label="Clear chat history"
-          >
-            Clear
-          </button>
-          <button
-            type="submit"
-            disabled={busy || !input.trim()}
-            className="rounded-xl px-5 py-3 bg-blue-600 text-white disabled:opacity-50"
-          >
-            {busy ? 'Sending…' : 'Send'}
-          </button>
-        </form>
+      {/* Chat window (about half the viewport, scrollable) */}
+      <div ref={boxRef} className="chatbox" aria-label="Chat history">
+        {messages.map(m => (
+          <div key={m.id} className={`msg ${m.role}`}>
+            <div className="who">{m.role === 'user' ? 'You' : 'Agent'}</div>
+            <div className="bubble">{m.text}</div>
+          </div>
+        ))}
       </div>
-    </main>
+
+      {/* Input row (kept relatively high on page by putting chat in fixed height) */}
+      <form onSubmit={onSubmit} className="inputrow" aria-label="Chat input">
+        <textarea
+          ref={taRef}
+          value={input}
+          onChange={e => { setInput(e.target.value); autoGrow(); }}
+          placeholder="Ask for 5 short ideas for BrightScheduler…"
+          rows={2}
+        />
+        <button
+          type="submit"
+          disabled={busy || !input.trim()}
+          aria-label="Send"
+        >
+          {busy ? 'Sending…' : 'Send'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { try { localStorage.removeItem('devpr_chat'); } catch {}; setMessages(ms => ms.slice(0, 1)); }}
+          aria-label="Clear chat"
+          className="secondary"
+          disabled={busy}
+        >
+          Clear
+        </button>
+      </form>
+
+      <style jsx global>{`
+        /* ~16pt => ~21px base across the page */
+        html, body { font-size: 21px; }
+        body { margin: 0; background: #fafafa; color: #111; }
+      `}</style>
+      <style jsx>{`
+        .wrap {
+          max-width: 960px;
+          margin: 40px auto;
+          padding: 0 16px;
+        }
+        h1 { margin: 0 0 8px; font-weight: 700; }
+        .subtitle { margin: 0 0 16px; color: #555; }
+
+        .chatbox {
+          border: 1px solid #e3e3e3;
+          background: #fff;
+          border-radius: 16px;
+          padding: 14px;
+          overflow-y: auto;
+          /* Half-page height; won’t grow past this */
+          height: min(50vh, 520px);
+        }
+
+        .msg { margin: 10px 0; }
+        .who {
+          font-size: 0.65em;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+          color: #777;
+          margin-bottom: 4px;
+        }
+        .bubble {
+          white-space: pre-wrap;
+          line-height: 1.35;
+          padding: 10px 12px;
+          border-radius: 12px;
+          border: 1px solid #e6e6e6;
+          background: #fbfbfb;
+        }
+        .msg.user .bubble { background: #eef5ff; border-color: #d7e7ff; }
+
+        .inputrow {
+          /* Keeps the input visually “higher” by not pushing it to page bottom */
+          margin: 14px auto 0;
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+          gap: 10px;
+          align-items: start;
+          max-width: 860px;
+        }
+        textarea {
+          width: 100%;
+          font: inherit;
+          line-height: 28px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          border: 1px solid #cfd4dc;
+          resize: none;            /* we auto-grow instead */
+          background: #fff;
+          outline: none;
+        }
+        textarea:focus { border-color: #7fb3ff; box-shadow: 0 0 0 3px rgba(127,179,255,.2); }
+
+        button {
+          font: inherit;
+          padding: 10px 18px;
+          border-radius: 12px;
+          border: 1px solid #0b63ff;
+          background: #0b63ff;
+          color: #fff;
+          cursor: pointer;
+        }
+        button[disabled] { opacity: .55; cursor: default; }
+        .secondary {
+          background: #fff;
+          color: #333;
+          border-color: #cfd4dc;
+        }
+      `}</style>
+    </div>
   );
 }
