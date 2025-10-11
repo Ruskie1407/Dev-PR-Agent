@@ -6,6 +6,12 @@ const KEY =
   process.env.OPENAI_KEY ||
   "";
 
+// Keep replies compact by default
+const INSTRUCTIONS =
+  "You are a helpful, concise product assistant. " +
+  "Keep replies short (<= 60 words) unless the user explicitly asks for long form. " +
+  "When asked for ideas, give at most 5 bullets, <= 12 words each.";
+
 function isResponsesModel(m: string) {
   return /^(gpt-5|gpt-4\.1|gpt-4o|o\d)/i.test(m);
 }
@@ -54,8 +60,12 @@ export async function askLLM(prompt: string): Promise<string> {
     const url = `${BASE}/responses`;
     const payload = {
       model: MODEL,
+      // ✅ concise by default
+      instructions: INSTRUCTIONS,
       input: String(prompt),
-      max_output_tokens: 1024
+      // ✅ big enough that it won't truncate typical answers
+      max_output_tokens: 2048
+      // (no temperature/top_p here)
     };
 
     const res = await fetch(url, {
@@ -72,17 +82,27 @@ export async function askLLM(prompt: string): Promise<string> {
       const msg = (body?.error?.message || body?.error?.code || String(body)).toString();
       throw new Error(`OpenAI ${res.status}: ${msg}`);
     }
+
     const text = extractText(body);
     if (text) return text;
+
     const preview = typeof body === "string" ? body : JSON.stringify(body);
+    // If still incomplete give a helpful hint back to the caller:
+    if (typeof body === "object" && body?.status === "incomplete") {
+      return "[truncated] Reply was too long. Try asking for fewer bullets or shorter output.";
+    }
     return `[unparsed model output] ${preview.slice(0, 240)}…`;
   }
 
+  // Legacy chat models (kept for completeness)
   const url = `${BASE}/chat/completions`;
   const payload = {
     model: MODEL,
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 120,
+    messages: [
+      { role: "system", content: INSTRUCTIONS },
+      { role: "user", content: prompt }
+    ],
+    max_tokens: 256,
     temperature: 0.7,
   };
 
