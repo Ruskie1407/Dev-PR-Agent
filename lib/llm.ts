@@ -10,23 +10,32 @@ function isResponsesModel(m: string) {
   return /^(gpt-5|gpt-4\.1|gpt-4o|o\d)/i.test(m);
 }
 
-function pickTextFromResponses(body: any): string | null {
-  // 1) output_text (convenience)
+// Pull useful text from many plausible shapes
+function extractText(body: any): string | null {
+  // 1) Preferred aggregate
   if (typeof body?.output_text === "string" && body.output_text.trim()) {
     return body.output_text.trim();
   }
-  // 2) output[].content[] parts (text fields)
-  const parts = body?.output?.[0]?.content;
-  if (Array.isArray(parts) && parts.length) {
-    const txt = parts
-      .map((p: any) =>
-        typeof p?.text === "string" ? p.text :
-        typeof p?.content === "string" ? p.content : "")
-      .join("")
-      .trim();
+
+  // 2) output[] / content[] shapes
+  if (Array.isArray(body?.output) && body.output.length) {
+    // output[i].content can be string OR array of blocks having .text/.content
+    let chunks: string[] = [];
+    for (const item of body.output) {
+      const c = item?.content;
+      if (typeof c === "string") chunks.push(c);
+      else if (Array.isArray(c)) {
+        for (const b of c) {
+          if (typeof b?.text === "string") chunks.push(b.text);
+          else if (typeof b?.content === "string") chunks.push(b.content);
+        }
+      }
+    }
+    const txt = chunks.join("").trim();
     if (txt) return txt;
   }
-  // 3) candidates[0].content (older shapes)
+
+  // 3) candidates[0].content (older/alt shapes)
   const cand = body?.candidates?.[0]?.content;
   if (cand) {
     if (typeof cand === "string" && cand.trim()) return cand.trim();
@@ -35,6 +44,15 @@ function pickTextFromResponses(body: any): string | null {
       if (txt) return txt;
     }
   }
+
+  // 4) Chat Completions fallback (if we ever hit it)
+  const msg = body?.choices?.[0]?.message?.content;
+  if (typeof msg === "string" && msg.trim()) return msg.trim();
+  if (Array.isArray(msg)) {
+    const txt = msg.map((p:any)=>p?.text ?? p?.content ?? "").join("").trim();
+    if (txt) return txt;
+  }
+
   return null;
 }
 
@@ -42,12 +60,13 @@ export async function askLLM(prompt: string): Promise<string> {
   if (!KEY) throw new Error("Missing OPENAI_API_KEY");
 
   if (isResponsesModel(MODEL)) {
-    // Modern models → Responses API (no temperature; max_output_tokens is correct)
+    // Modern models → Responses API
     const url = `${BASE}/responses`;
     const payload = {
       model: MODEL,
-      input: [{ role: "user", content: prompt }],
-      max_output_tokens: 120
+      input: String(prompt),           // ✅ simple string input
+      max_output_tokens: 120           // ✅ correct name for Responses API
+      // (no temperature/top_p here)
     };
 
     const res = await fetch(url, {
@@ -65,11 +84,15 @@ export async function askLLM(prompt: string): Promise<string> {
       throw new Error(`OpenAI ${res.status}: ${msg}`);
     }
 
-    const text = pickTextFromResponses(body);
-    return text ?? "OK";
+    const text = extractText(body);
+    if (text) return text;
+
+    // If we still couldn't parse, show a short preview instead of "OK"
+    const preview = typeof body === "string" ? body : JSON.stringify(body);
+    return `[unparsed model output] ${preview.slice(0, 240)}…`;
   }
 
-  // Legacy chat models → Chat Completions (temperature allowed)
+  // Legacy chat models → Chat Completions (kept for completeness)
   const url = `${BASE}/chat/completions`;
   const payload = {
     model: MODEL,
@@ -94,7 +117,11 @@ export async function askLLM(prompt: string): Promise<string> {
   }
 
   const msg = body?.choices?.[0]?.message?.content;
-  if (typeof msg === "string") return msg;
-  if (Array.isArray(msg)) return msg.map((p: any) => p?.text ?? "").join("");
-  return String(msg ?? "OK");
+  if (typeof msg === "string" && msg.trim()) return msg.trim();
+  if (Array.isArray(msg)) {
+    const txt = msg.map((p:any)=>p?.text ?? p?.content ?? "").join("").trim();
+    if (txt) return txt;
+  }
+  const preview = typeof body === "string" ? body : JSON.stringify(body);
+  return `[unparsed chat output] ${preview.slice(0, 240)}…`;
 }
