@@ -166,7 +166,7 @@ export default function Chat() {
                         Open full (collapsible sections)
                       </summary>
                       <div className="mt-2">
-                        <Sectioned text={m.text} />
+                        <p className="whitespace-pre-wrap">{m.text}</p>
                       </div>
                     </details>
                   </>
@@ -174,7 +174,7 @@ export default function Chat() {
                   <>
                     {/* Full text (can still collapse back) */}
                     <div className="whitespace-pre-wrap">
-                      <Sectioned text={m.text} />
+                      <p className="whitespace-pre-wrap">{m.text}</p>
                     </div>
                     {isLong && m.role === 'agent' && (
                       <button
