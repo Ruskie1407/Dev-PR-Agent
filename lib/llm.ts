@@ -1,5 +1,5 @@
 const RAW_BASE = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-const BASE = RAW_BASE.replace(/\/+$/,""); // no trailing slash
+const BASE = RAW_BASE.replace(/\/+$/,"");
 const MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
 const KEY =
   process.env.OPENAI_API_KEY ||
@@ -14,13 +14,14 @@ export async function askLLM(prompt: string): Promise<string> {
   if (!KEY) throw new Error("Missing OPENAI_API_KEY");
 
   if (isResponsesModel(MODEL)) {
-    // ✅ Modern models → Responses API, no temperature, use max_completion_tokens
+    // ✅ Responses API (modern models)
     const url = `${BASE}/responses`;
     const payload = {
       model: MODEL,
       input: prompt,
-      max_completion_tokens: 120,
-      // NO temperature (default behavior only for these models)
+      // the correct param name:
+      max_output_tokens: 120,
+      // omit temperature/top_p for these models (defaults only)
     };
 
     const res = await fetch(url, {
@@ -38,14 +39,14 @@ export async function askLLM(prompt: string): Promise<string> {
       throw new Error(`OpenAI ${res.status}: ${msg}`);
     }
 
-    // Prefer output_text; fallback to parts if needed
-    const text = (body as any).output_text
-      ?? (body as any).output?.[0]?.content?.[0]?.text
-      ?? "";
+    const text =
+      (body as any).output_text ??
+      (body as any).output?.[0]?.content?.[0]?.text ??
+      "";
     return String(text || "OK");
   }
 
-  // �� Legacy chat models → Chat Completions, allow temperature
+  // 🧰 Legacy chat models → Chat Completions
   const url = `${BASE}/chat/completions`;
   const payload = {
     model: MODEL,
@@ -68,6 +69,7 @@ export async function askLLM(prompt: string): Promise<string> {
     const msg = (body?.error?.message || body?.error?.code || String(body)).toString();
     throw new Error(`OpenAI ${res.status}: ${msg}`);
   }
+
   const msg = body?.choices?.[0]?.message?.content;
   if (typeof msg === "string") return msg;
   if (Array.isArray(msg)) return msg.map((p: any) => p?.text ?? "").join("");
