@@ -1,39 +1,35 @@
-import OpenAI from "openai";
-
-const API_KEY = process.env.OPENAI_API_KEY || "";
-const BASE_URL = process.env.OPENAI_BASE_URL || undefined;
-const MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
-
-function isResponsesModel(m: string) {
-  // Treat modern models as Responses API
-  return /^(gpt-5|gpt-4\.1|gpt-4o|o\d)/i.test(m);
-}
+const BASE = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+const MODEL = process.env.OPENAI_MODEL || "gpt-5-nano"; // change if you like
+const KEY =
+  process.env.OPENAI_API_KEY ||
+  process.env.OPENAI_KEY || // alternate names, just in case
+  "";
 
 export async function askLLM(prompt: string): Promise<string> {
-  if (!API_KEY) return "LLM not configured (missing OPENAI_API_KEY).";
-
-  const openai = new OpenAI({ apiKey: API_KEY, baseURL: BASE_URL });
-
-  if (isResponsesModel(MODEL)) {
-    const r = await openai.responses.create({
+  if (!KEY) throw new Error("Missing OPENAI_API_KEY");
+  const res = await fetch(`${BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
       model: MODEL,
-      input: prompt,
-      // ✅ key fix for modern models:
+      messages: [{ role: "user", content: prompt }],
+      // OpenAI “Responses API” models use max_completion_tokens (not max_tokens)
       max_completion_tokens: 120,
-      temperature: 0.3,
-    });
-    // Prefer the helper if available
-    return (r as any).output_text
-      ?? (r as any).output?.[0]?.content?.[0]?.text
-      ?? "OK";
+      temperature: 0.7,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `OpenAI error ${res.status}`);
   }
 
-  // Legacy chat models pathway
-  const r = await openai.chat.completions.create({
-    model: MODEL,
-    messages: [{ role: "user", content: prompt }],
-    max_tokens: 120,        // valid for legacy chat models
-    temperature: 0.3,
-  });
-  return r.choices?.[0]?.message?.content ?? "OK";
+  const msg = data?.choices?.[0]?.message?.content;
+  if (typeof msg === "string") return msg;
+  // some SDKs return array-of-parts; join if needed
+  if (Array.isArray(msg)) return msg.map((p: any) => p?.text ?? "").join("");
+  return String(msg ?? "");
 }
