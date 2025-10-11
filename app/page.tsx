@@ -119,7 +119,7 @@ export default function Chat() {
 
   return (
     <main className="min-h-[100svh] flex flex-col items-center p-4 md:p-6 font-[system-ui] bg-gray-50">
-      <div className="w-full max-w-3xl">
+      <div className="w-full max-w-4xl">
         {/* Header */}
         <header className="mb-3">
           <h1 className="text-2xl font-semibold">Dev PR Agent</h1>
@@ -192,18 +192,18 @@ export default function Chat() {
         </div>
 
         {/* Composer */}
-        <form onSubmit={onSubmit} className="mt-3 flex gap-2">
+        <form onSubmit={onSubmit} className="mt-5 flex items-center justify-center gap-2">
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Ask for 5 short ideas for BrightScheduler…"
-            className="flex-1 rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            className="w-full max-w-2xl rounded-xl border px-4 py-3 text-base outline-none focus:ring-2 focus:ring-blue-400 bg-white"
             aria-label="Message input"
           />
           <button
             type="submit"
             disabled={busy || !input.trim()}
-            className="rounded-xl px-4 py-2 bg-blue-600 text-white disabled:opacity-50"
+            className="rounded-xl px-5 py-3 bg-blue-600 text-white disabled:opacity-50"
           >
             {busy ? 'Sending…' : 'Send'}
           </button>
