@@ -10,6 +10,7 @@
     "build": "next build"
   },
   "dependencies": {
+    "@libsql/client": "^0.15.15",
     "@octokit/rest": "^20.0.2",
     "@supabase/supabase-js": "^2.75.0",
     "next": "^15.5.4",
